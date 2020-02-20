@@ -5,6 +5,7 @@ echo $var
 state="PENDING"
 while [ "$state" != "RUNNING" ]
 do
+sleep 1
 state=$(sacct -j $var | awk 'FNR == 3 {print $6}')
 done
 b=$(date +%s%N)

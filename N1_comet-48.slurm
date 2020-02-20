@@ -14,7 +14,7 @@
 #SBATCH -t 00:10:00
 # Commands go here
 
-ibrun -np 96 ./apf -n 1800 -i 2000 -x 2 -y 48
+ibrun -np 480 ./apf -n 1800 -i 2000 -x 20 -y 24
 #ibrun -np 48 ./apf -n 1800 -i 2000 -x 4 -y 12
 #ibrun -np 48 ./apf -n 1800 -i 2000 -x 6 -y 8
 #ibrun -np 48 ./apf -n 1800 -i 2000 -x 8 -y 6
