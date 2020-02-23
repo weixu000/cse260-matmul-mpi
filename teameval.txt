@@ -1,5 +1,5 @@
                     CSE 260, Parallel Computation
-                            (Winter 2019)
+                            (Winter 2020)
            Department of Computer Science and Engineering 	
                  University of California, San Diego 	
 
