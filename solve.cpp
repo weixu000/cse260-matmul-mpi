@@ -198,6 +198,10 @@ solve(double **_E, double **_E_prev, double *R, double alpha, double dt, Plotter
             double mx, sumSq;
 //            stats(E, cb.m, cb.n, &mx, &sumSq);
             stats_submatrix(e, m, n, stride, &mx, &sumSq);
+#ifdef _MPI_
+            MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &mx, &mx, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+#endif
             double l2norm = L2Norm(sumSq);
             repNorms(l2norm, mx, dt, cb.m, cb.n, niter, cb.stats_freq);
         }
@@ -217,6 +221,10 @@ solve(double **_E, double **_E_prev, double *R, double alpha, double dt, Plotter
     double sumSq;
 //    stats(E_prev, cb.m, cb.n, &Linf, &sumSq);
     stats_submatrix(e_prev, m, n, stride, &Linf, &sumSq);
+#ifdef _MPI_
+    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &Linf, &Linf, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+#endif
     L2 = L2Norm(sumSq);
 
     // Swap pointers so we can re-use the arrays
