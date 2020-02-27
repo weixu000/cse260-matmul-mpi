@@ -19,6 +19,7 @@ void repNorms(double l2norm, double mx, double dt, int m, int n, int niter, int 
 
 void stats(double *E, int m, int n, double *_mx, double *sumSq);
 
+// Replace stats() function for sub-block
 void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, double *_sumSq) {
     double mx = -1;
     double sumSq = 0;
@@ -54,6 +55,7 @@ double L2Norm(double sumSq) {
     return l2norm;
 }
 
+// Compute within sub-block
 static inline void aliev_panfilov(double *E,
                                   double *E_prev,
                                   double *R,
@@ -101,13 +103,17 @@ solve(double **_E, double **_E_prev, double *R, double alpha, double dt, Plotter
 #ifdef _MPI_
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 #endif
+    // 2D index of sub-block
     const int x = myrank / cb.py;
     const int y = myrank % cb.py;
+    // dimension of sub-block generally
     const int M = (cb.m + cb.px - 1) / cb.px;
     const int N = (cb.n + cb.py - 1) / cb.py;
+    // dimension of this sub-block
     const int m = x == cb.px - 1 ? cb.m - (cb.px - 1) * M : M;
     const int n = y == cb.py - 1 ? cb.n - (cb.py - 1) * N : N;
 
+    // Sub-block
     const int offset = x * M * stride + y * N;
     double *e = E + offset;
     double *e_prev = E_prev + offset;
