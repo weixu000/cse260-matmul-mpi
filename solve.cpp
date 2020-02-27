@@ -19,6 +19,23 @@ void repNorms(double l2norm, double mx, double dt, int m, int n, int niter, int 
 
 void stats(double *E, int m, int n, double *_mx, double *sumSq);
 
+void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, double *_sumSq) {
+    double mx = -1;
+    double sumSq = 0;
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            double x = E[(i + 1) * stride + (1 + j)];
+            sumSq += x * x;
+            double fe = fabs(x);
+            if (fe > mx) {
+                mx = fe;
+            }
+        }
+    }
+    *_mx = mx;
+    *_sumSq = sumSq;
+}
+
 extern control_block cb;
 
 // #ifdef SSE_VEC
@@ -179,7 +196,8 @@ solve(double **_E, double **_E_prev, double *R, double alpha, double dt, Plotter
 
         if (cb.stats_freq && !(niter % cb.stats_freq)) {
             double mx, sumSq;
-            stats(E, cb.m, cb.n, &mx, &sumSq);
+//            stats(E, cb.m, cb.n, &mx, &sumSq);
+            stats_submatrix(e, m, n, stride, &mx, &sumSq);
             double l2norm = L2Norm(sumSq);
             repNorms(l2norm, mx, dt, cb.m, cb.n, niter, cb.stats_freq);
         }
@@ -197,7 +215,8 @@ solve(double **_E, double **_E_prev, double *R, double alpha, double dt, Plotter
 #endif
 
     double sumSq;
-    stats(E_prev, cb.m, cb.n, &Linf, &sumSq);
+//    stats(E_prev, cb.m, cb.n, &Linf, &sumSq);
+    stats_submatrix(e_prev, m, n, stride, &Linf, &sumSq);
     L2 = L2Norm(sumSq);
 
     // Swap pointers so we can re-use the arrays
