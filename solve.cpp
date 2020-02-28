@@ -66,6 +66,8 @@ static inline void aliev_panfilov(double *E,
                                   int n) {
     int innerBlockRowStartIndex = stride + 1;
     int innerBlockRowEndIndex = (((m + 2) * stride - 1) - (n)) - stride;
+
+#ifdef FUSED
     for (int j = innerBlockRowStartIndex; j <= innerBlockRowEndIndex; j += stride) {
         double *E_tmp = E + j;
         double *E_prev_tmp = E_prev + j;
@@ -79,6 +81,29 @@ static inline void aliev_panfilov(double *E,
                 (-R_tmp[i] - kk * E_prev_tmp[i] * (E_prev_tmp[i] - b - 1));
         }
     }
+#else
+    for (int j = innerBlockRowStartIndex; j <= innerBlockRowEndIndex; j += stride) {
+        double *E_tmp = E + j;
+        double *E_prev_tmp = E_prev + j;
+        for (int i = 0; i < n; i++) {
+            E_tmp[i] = E_prev_tmp[i] + alpha
+                * (E_prev_tmp[i + 1] + E_prev_tmp[i - 1] - 4 * E_prev_tmp[i] + E_prev_tmp[i + stride]
+                    + E_prev_tmp[i - stride]);
+        }
+    }
+
+    for (int j = innerBlockRowStartIndex; j <= innerBlockRowEndIndex; j += stride) {
+        double *E_tmp = E + j;
+        double *R_tmp = R + j;
+        double *E_prev_tmp = E_prev + j;
+        for (int i = 0; i < n; i++) {
+            E_tmp[i] +=
+                -dt * (kk * E_prev_tmp[i] * (E_prev_tmp[i] - a) * (E_prev_tmp[i] - 1) + E_prev_tmp[i] * R_tmp[i]);
+            R_tmp[i] += dt * (epsilon + M1 * R_tmp[i] / (E_prev_tmp[i] + M2))
+                * (-R_tmp[i] - kk * E_prev_tmp[i] * (E_prev_tmp[i] - b - 1));
+        }
+    }
+#endif
 }
 
 static inline void copy_arr(const double *from, double *to, int stride, int n) {
