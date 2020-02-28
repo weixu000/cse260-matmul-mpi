@@ -56,16 +56,16 @@ double L2Norm(double sumSq) {
 }
 
 // Compute within sub-block
-static inline void aliev_panfilov(double *E,
-                                  double *E_prev,
-                                  double *R,
-                                  double alpha,
-                                  double dt,
-                                  int stride,
-                                  int m,
-                                  int n) {
-    int innerBlockRowStartIndex = stride + 1;
-    int innerBlockRowEndIndex = (((m + 2) * stride - 1) - (n)) - stride;
+static inline void aliev_panfilov(double *__restrict__ E,
+                                  double *__restrict__ E_prev,
+                                  double *__restrict__ R,
+                                  const double alpha,
+                                  const double dt,
+                                  const int stride,
+                                  const int m,
+                                  const int n) {
+    const int innerBlockRowStartIndex = stride + 1;
+    const int innerBlockRowEndIndex = m * stride + 1;
 
 #ifdef FUSED
     for (int j = innerBlockRowStartIndex; j <= innerBlockRowEndIndex; j += stride) {
@@ -106,7 +106,7 @@ static inline void aliev_panfilov(double *E,
 #endif
 }
 
-static inline void copy_arr(const double *from, double *to, int stride, int n) {
+static inline void copy_arr(const double *__restrict__ from, double *__restrict__ to, const int stride, const int n) {
     for (int i = 0; i < n; i++) {
         to[i * stride] = from[i * stride];
     }
