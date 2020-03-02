@@ -8,7 +8,9 @@
 #include <assert.h>
 // Needed for memalign
 #include <malloc.h>
-
+#ifdef _MPI_
+#include <mpi.h>
+#endif
 using namespace std;
 
 void printMat(const char mesg[], double *E, int m, int n);
@@ -24,6 +26,11 @@ void printMat(const char mesg[], double *E, int m, int n);
 // be mapped to appropriate local indices when parallelizing the code
 //
 void init (double *E,double *E_prev,double *R,int m,int n){
+   #ifdef _MPI_
+    int myrank;
+    MPI_Comm_rank(MPI_COMM_WORLD,&myrank);
+    if(myrank)return ;
+    #endif
     int i;
 
     for (i=0; i < (m+2)*(n+2); i++)

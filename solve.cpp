@@ -120,13 +120,16 @@ static inline void copy_arr(const double *__restrict__ from, double *__restrict_
 #define TAG_RIGHT (TAG_TOP+3)
 
 void
-solve(double **_E, double **_E_prev, double *R, double alpha, double dt, Plotter *plotter, double &L2, double &Linf) {
-    double *E = *_E, *E_prev = *_E_prev;
+solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotter *plotter, double &L2, double &Linf) {
+    double *E = *_E, *E_prev = *_E_prev,*R=_R;
+    
     const int stride = cb.n + 2;
 
     int myrank = 0;
 #ifdef _MPI_
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+    MPI_Bcast(E_prev, (cb.m+2)*(cb.n+2), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(R, (cb.m+2)*(cb.n+2), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 #endif
     // 2D index of sub-block
     const int x = myrank / cb.py;
