@@ -144,18 +144,16 @@ static inline void reorganize(const double *__restrict__ from, double *__restric
    }
 }
 
-static inline void place_sub_matrix(const double *__restrict__ from, double *__restrict__ to, const int stride, 
-                                    const int M, const int N,const int XL, const int YL,int x ,int y)
+static inline void place_sub_matrix(const double *__restrict__ from, double *__restrict__ to, 
+                                    const int M, const int N)
 {   
-    int addx= (x-XL) < 0? 0:(x-XL);
-    int addy= (y-YL) < 0? 0:(y-YL);
-    int m = x < XL? M : (M-1);
-    int n = y < YL? N : (N-1);
-    int offset = (x * M + addx * (M-1) +1) * stride + (y * N + addy * (N-1))+1;
-    for(int i= 0;i < m; i++)
-        for(int j= 0;j < n; j++)
-            to[offset + i * stride + j]= from[i * N + j];
-    
+   for(int i=0;i<M+2;i++)
+       for(int j=0;j< N+2; j++)
+           to[i * ( N + 2 ) + j ] = 0;
+      
+    for(int i=0;i < M ;i++)
+       for(int j=0;j < N; j++)
+           to[ ( i + 1 ) * ( N + 2 ) + ( j + 1 ) ]=from[ i * N+  j];
 }
 
 #define RANK(x, y) ((x)*cb.py+(y))
@@ -168,7 +166,7 @@ static inline void place_sub_matrix(const double *__restrict__ from, double *__r
 void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotter *plotter, double &L2, double &Linf) {
     double *E = *_E, *E_prev = *_E_prev,*R=_R;
     
-    const int stride = cb.n + 2;
+    int stride = cb.n + 2;
 
     int myrank = 0;
     #ifdef _MPI_
@@ -193,16 +191,17 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
     const int addx= (x-XL) < 0? 0:(x-XL);
     const int addy= (y-YL) < 0? 0:(y-YL);
     const int offset = (x * M + addx * (M-1) ) * stride + (y * N + addy * (N-1));
-    double *e = E + offset;
-    double *e_prev = E_prev + offset;
-    double *r = R + offset;
+    
 
 
 
     double* E_scatter = alloc1D(cb.px*M,cb.py*N);
     double* R_scatter = alloc1D(cb.px*M,cb.py*N);
-    double* E_prev_sub = alloc1D(M, N);
-    double* R_sub = alloc1D(M, N);
+    double* E_recv = alloc1D(M, N);
+    double* R_recv = alloc1D(M, N);
+    double *e=alloc1D(M+2, N+2);
+    double *e_prev=alloc1D(M+2, N+2);
+    double *r=alloc1D(M+2, N+2);
     #ifdef _MPI_
     if(myrank==0)
     {
@@ -210,20 +209,19 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
         reorganize(R, R_scatter, stride, M, N, XL, YL) ;
     }
        
-    MPI_Scatter(E_scatter, M*N, MPI_DOUBLE, E_prev_sub, M*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Scatter(R_scatter, M*N, MPI_DOUBLE, R_sub, M*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    if(myrank!=0)
-    {
-       place_sub_matrix(E_prev_sub, E_prev, stride, M, N, XL, YL ,x ,y);
-       place_sub_matrix(R_sub, R, stride, M, N, XL, YL, x, y);
-    }
+    MPI_Scatter(E_scatter, M*N, MPI_DOUBLE, E_recv, M*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Scatter(R_scatter, M*N, MPI_DOUBLE, R_recv, M*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    
+    place_sub_matrix(E_recv, e_prev, M, N);
+    place_sub_matrix(R_recv, r,  M, N);
+    
     
    
     #endif
     
   
 
-    
+stride=N+2;
 
 #ifdef _MPI_
     MPI_Datatype col_type;
