@@ -120,43 +120,60 @@ static inline void reorganize(const double *__restrict__ from,
                               const int N,
                               const int XL,
                               const int YL) {
-    int x = 0;
-    int y = 0;
     int to_pos = 0;
-    while (x < cb.px) {
-        while (y < cb.py) {
-
+    for (int x = 0; x < cb.px; ++x) {
+        for (int y = 0; y < cb.py; ++y) {
             int addx = (x - XL) < 0 ? 0 : (x - XL);
             int addy = (y - YL) < 0 ? 0 : (y - YL);
             int m = x < XL ? M : (M - 1);
             int n = y < YL ? N : (N - 1);
             int offset = (x * M + addx * (M - 1) + 1) * stride + (y * N + addy * (N - 1)) + 1;
-
-            for (int i = 0; i < M; i++)
-                for (int j = 0; j < N; j++)
-                    to[to_pos + i * N + j] = 0;
-
             for (int i = 0; i < m; i++)
                 for (int j = 0; j < n; j++)
                     to[to_pos + i * N + j] = from[offset + i * stride + j];
+            to_pos += M * N;
+        }
+    }
+}
+
+static inline void reorganize_reverse(const double *__restrict__ from,
+                                      double *__restrict__ to,
+                                      const int stride,
+                                      const int M,
+                                      const int N,
+                                      const int XL,
+                                      const int YL) {
+    int to_pos = 0;
+    for (int x = 0; x < cb.px; ++x) {
+        for (int y = 0; y < cb.py; ++y) {
+            int addx = (x - XL) < 0 ? 0 : (x - XL);
+            int addy = (y - YL) < 0 ? 0 : (y - YL);
+            int m = x < XL ? M : (M - 1);
+            int n = y < YL ? N : (N - 1);
+            int offset = (x * M + addx * (M - 1) + 1) * stride + (y * N + addy * (N - 1)) + 1;
+            for (int i = 0; i < m; i++)
+                for (int j = 0; j < n; j++)
+//                    to[to_pos + i * N + j] = from[offset + i * stride + j];
+                    to[offset + i * stride + j] = from[to_pos + i * N + j];
 
             to_pos += M * N;
-            y++;
         }
-        x++;
-        y = 0;
     }
 }
 
 static inline void place_sub_matrix(const double *__restrict__ from, double *__restrict__ to,
                                     const int M, const int N) {
-    for (int i = 0; i < M + 2; i++)
-        for (int j = 0; j < N + 2; j++)
-            to[i * (N + 2) + j] = 0;
-
     for (int i = 0; i < M; i++)
         for (int j = 0; j < N; j++)
             to[(i + 1) * (N + 2) + (j + 1)] = from[i * N + j];
+}
+
+static inline void place_sub_matrix_reverse(const double *__restrict__ from, double *__restrict__ to,
+                                            const int M, const int N) {
+    for (int i = 0; i < M; i++)
+        for (int j = 0; j < N; j++)
+//            to[(i + 1) * (N + 2) + (j + 1)] = from[i * N + j];
+            to[i * N + j] = from[(i + 1) * (N + 2) + (j + 1)];
 }
 
 #define RANK(x, y) ((x)*cb.py+(y))
@@ -308,7 +325,17 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
         }
 
         if (cb.plot_freq && !(niter % cb.plot_freq)) {
-            plotter->updatePlot(E, niter, cb.m, cb.n);
+#ifdef _MPI_
+            place_sub_matrix_reverse(e, E_recv, M, N);
+            MPI_Gather(E_recv, M * N, MPI_DOUBLE, E_scatter, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+            if (myrank == 0) {
+                reorganize_reverse(E_scatter, E_prev, cb.n + 2, M, N, XL, YL);
+                plotter->updatePlot(E_prev, niter, cb.m, cb.n);
+            }
+#else
+            plotter->updatePlot(e, niter, cb.m, cb.n);
+#endif
         }
 
         // Swap current and previous meshes
