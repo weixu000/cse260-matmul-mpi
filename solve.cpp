@@ -190,14 +190,14 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
     const int m = x < XL ? M : (M - 1);
     const int n = y < YL ? N : (N - 1);
 
-    double *E_scatter = alloc1D(cb.px * M, cb.py * N);
-    double *R_scatter = alloc1D(cb.px * M, cb.py * N);
-    double *E_recv = alloc1D(M, N);
-    double *R_recv = alloc1D(M, N);
     double *e = alloc1D(M + 2, N + 2);
     double *e_prev = alloc1D(M + 2, N + 2);
     double *r = alloc1D(M + 2, N + 2);
 #ifdef _MPI_
+    double *E_scatter = alloc1D(cb.px * M, cb.py * N);
+    double *R_scatter = alloc1D(cb.px * M, cb.py * N);
+    double *E_recv = alloc1D(M, N);
+    double *R_recv = alloc1D(M, N);
     if (myrank == 0) {
         reorganize(E_prev, E_scatter, stride, M, N, XL, YL);
         reorganize(R, R_scatter, stride, M, N, XL, YL);
@@ -208,7 +208,9 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
 
     place_sub_matrix(E_recv, e_prev, M, N);
     place_sub_matrix(R_recv, r, M, N);
-
+#else
+    copy_arr(E_prev, e_prev, 1, (M + 2) * (N + 2));
+    copy_arr(R, r, 1, (M + 2) * (N + 2));
 #endif
 
     stride = N + 2;
