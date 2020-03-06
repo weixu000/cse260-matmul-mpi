@@ -21,7 +21,7 @@ double *alloc1D(int m, int n);
 void repNorms(double l2norm, double mx, double dt, int m, int n, int niter, int stats_freq);
 
 // Replace stats() function for sub-block
-void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, double *_sumSq) {
+static inline void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, double *_sumSq) {
     double mx = -1;
     double sumSq = 0;
     for (int i = 0; i < m; ++i) {
@@ -40,12 +40,6 @@ void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, dou
 
 extern control_block cb;
 
-// #ifdef SSE_VEC
-// If you intend to vectorize using SSE instructions, you must
-// disable the compiler's auto-vectorizer
-// __attribute__((optimize("no-tree-vectorize")))
-// #endif
-
 // The L2 norm of an array is computed by taking sum of the squares
 // of each element, normalizing by dividing by the number of points
 // and then taking the sequare root of the result
@@ -56,6 +50,22 @@ double L2Norm(double sumSq) {
     return l2norm;
 }
 
+static inline void compute_status(const double *E, int m, int n, int stride, double *_mx, double *_l2, int myrank) {
+    double mx, sumSq;
+    stats_submatrix(E, m, n, stride, &mx, &sumSq);
+#ifdef _MPI_
+    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &mx, &mx, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+#endif
+    *_mx = mx;
+    *_l2 = L2Norm(sumSq);
+}
+
+// #ifdef SSE_VEC
+// If you intend to vectorize using SSE instructions, you must
+// disable the compiler's auto-vectorizer
+// __attribute__((optimize("no-tree-vectorize")))
+// #endif
 // Compute within sub-block
 static inline void aliev_panfilov(double *__restrict__ E,
                                   double *__restrict__ E_prev,
@@ -316,13 +326,8 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
         aliev_panfilov(e, e_prev, r, alpha, dt, stride, m, n);
 
         if (cb.stats_freq && !(niter % cb.stats_freq)) {
-            double mx, sumSq;
-            stats_submatrix(e, m, n, stride, &mx, &sumSq);
-#ifdef _MPI_
-            MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &mx, &mx, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-            MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-#endif
-            double l2norm = L2Norm(sumSq);
+            double mx, l2norm;
+            compute_status(r, m, n, stride, &mx, &l2norm, myrank);
             repNorms(l2norm, mx, dt, cb.m, cb.n, niter, cb.stats_freq);
         }
 
@@ -348,13 +353,7 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
     MPI_Type_free(&col_type);
 #endif
 
-    double sumSq;
-    stats_submatrix(e_prev, m, n, stride, &Linf, &sumSq);
-#ifdef _MPI_
-    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &Linf, &Linf, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-#endif
-    L2 = L2Norm(sumSq);
+    compute_status(e_prev, m, n, stride, &Linf, &L2, myrank);
 
     // Swap pointers so we can re-use the arrays
     if (cb.niters % 2) {
