@@ -220,8 +220,10 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
         reorganize(R, R_scatter, stride, M, N, XL, YL);
     }
 
-    MPI_Scatter(E_scatter, M * N, MPI_DOUBLE, E_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Scatter(R_scatter, M * N, MPI_DOUBLE, R_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    if (!cb.noComm) {
+        MPI_Scatter(E_scatter, M * N, MPI_DOUBLE, E_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Scatter(R_scatter, M * N, MPI_DOUBLE, R_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
 
     place_sub_matrix(E_recv, e_prev, M, N);
     place_sub_matrix(R_recv, r, M, N);
