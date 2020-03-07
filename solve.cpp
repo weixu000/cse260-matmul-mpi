@@ -131,24 +131,23 @@ static inline void reorganize(const double *__restrict__ from,
                               const int XL,
                               const int YL) {
     int to_pos = 0;
-    for (int i = 0; i < cb.px*M; ++i) 
-        for (int j = 0; j < cb.py*N; ++j) 
-            to[i * (cb.py*N) + j ]=0;
+    for (int i = 0; i < cb.px * M; ++i)
+        for (int j = 0; j < cb.py * N; ++j)
+            to[i * (cb.py * N) + j] = 0;
     for (int x = 0; x < cb.px; ++x) {
         for (int y = 0; y < cb.py; ++y) {
             int addx = (x - XL) < 0 ? 0 : (x - XL);
             int addy = (y - YL) < 0 ? 0 : (y - YL);
-            int prevx = (x - XL) <= 0 ? x: XL;
-            int prevy = (y - YL) <= 0 ? y: YL;
+            int prevx = (x - XL) <= 0 ? x : XL;
+            int prevy = (y - YL) <= 0 ? y : YL;
             int m = x < XL ? M : (M - 1);
             int n = y < YL ? N : (N - 1);
             int offset = (prevx * M + addx * (M - 1) + 1) * stride + (prevy * N + addy * (N - 1)) + 1;
-            
+
             for (int i = 0; i < m; i++)
                 for (int j = 0; j < n; j++)
                     to[to_pos + i * N + j] = from[offset + i * stride + j];
-                
-            
+
             to_pos += M * N;
         }
     }
@@ -166,8 +165,8 @@ static inline void reorganize_reverse(const double *__restrict__ from,
         for (int y = 0; y < cb.py; ++y) {
             int addx = (x - XL) < 0 ? 0 : (x - XL);
             int addy = (y - YL) < 0 ? 0 : (y - YL);
-            int prevx = (x - XL) <= 0 ? x: XL;
-            int prevy = (y - YL) <= 0 ? y: YL;
+            int prevx = (x - XL) <= 0 ? x : XL;
+            int prevy = (y - YL) <= 0 ? y : YL;
             int m = x < XL ? M : (M - 1);
             int n = y < YL ? N : (N - 1);
             int offset = (prevx * M + addx * (M - 1) + 1) * stride + (prevy * N + addy * (N - 1)) + 1;
@@ -183,9 +182,9 @@ static inline void reorganize_reverse(const double *__restrict__ from,
 
 static inline void place_sub_matrix(const double *__restrict__ from, double *__restrict__ to,
                                     const int M, const int N) {
-    for (int i = 0; i < M+2; i++)
-        for (int j = 0; j < N+2; j++)
-            to[i  * (N + 2) + j ] = 0;
+    for (int i = 0; i < M + 2; i++)
+        for (int j = 0; j < N + 2; j++)
+            to[i * (N + 2) + j] = 0;
     for (int i = 0; i < M; i++)
         for (int j = 0; j < N; j++)
             to[(i + 1) * (N + 2) + (j + 1)] = from[i * N + j];
@@ -208,7 +207,7 @@ static inline void place_sub_matrix_reverse(const double *__restrict__ from, dou
 
 void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotter *plotter, double &L2,
            double &Linf) {
-    double *E = *_E, *E_prev = *_E_prev, *R = _R;
+    double *E_prev = *_E_prev, *R = _R;
 
     int stride = cb.n + 2;
 
@@ -238,14 +237,12 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
     double *R_scatter = alloc1D(cb.px * M, cb.py * N);
     double *E_recv = alloc1D(M, N);
     double *R_recv = alloc1D(M, N);
-    
-    if (myrank == 0) {
 
+    if (myrank == 0) {
         reorganize(E_prev, E_scatter, stride, M, N, XL, YL);
         reorganize(R, R_scatter, stride, M, N, XL, YL);
-       
     }
-    
+
     if (!cb.noComm) {
         MPI_Scatter(E_scatter, M * N, MPI_DOUBLE, E_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         MPI_Scatter(R_scatter, M * N, MPI_DOUBLE, R_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -253,9 +250,6 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
 
     place_sub_matrix(E_recv, e_prev, M, N);
     place_sub_matrix(R_recv, r, M, N);
-    
-    
-    
 #else
     copy_arr(E_prev, e_prev, 1, (M + 2) * (N + 2));
     copy_arr(R, r, 1, (M + 2) * (N + 2));
@@ -268,7 +262,7 @@ void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, P
     MPI_Type_vector(m, 1, stride, MPI_DOUBLE, &col_type);
     MPI_Type_commit(&col_type);
 #endif
-     
+
     // We continue to sweep over the mesh until the simulation has reached
     // the desired number of iterations
     for (int niter = 0; niter < cb.niters; niter++) {
