@@ -13,33 +13,39 @@ If you worked alone leave column B blank
 
 (1) List the names of your team members:
 
-A:
+A: Xu Wei
 
  
-B:
+B: Yang Jiao
 
  
  
 (2) Estimate how much time each team member devoted to this project, in HOURS.
 
   	                        A 	       B
-meetings 	  	  	 
-coding 	  	  	 
-writeup 	  	  	 
-planning (alone) 	  	  	 
-total (including meetings) 	  	  	 
+meetings 	  	  	        2
+coding 	  	  	            8
+writeup 	  	  	        4
+planning (alone) 	  	  	2
+total (including meetings) 	16
 
 
 (3) Discuss the following.
 (a) If you worked in a team, what were the major responsibilities
     of each team member?
+    Each did part of the coding and the report.
 (b) Did you complete the assignment?
+    Yes
 (c) What were your major strengths and weaknesses in doing this
     assignment (individually or in a team)?
     If in a team, also discuss how your team worked together.
+    We discussed thoroughly and did the work individually to be efficient.
 (d) What  lessons did you learn from these events.
+    Start early
 (e) If in a team, whether and how you plan to change the way
     your work together .
+    We did great.
 (f) Anything else that comes to mind.
+    Nothing
 
 
