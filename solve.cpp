@@ -15,12 +15,13 @@
 #include <mpi.h>
 #endif
 
+using namespace std;
+double *alloc1D(int m, int n);
+
 void repNorms(double l2norm, double mx, double dt, int m, int n, int niter, int stats_freq);
 
-void stats(double *E, int m, int n, double *_mx, double *sumSq);
-
 // Replace stats() function for sub-block
-void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, double *_sumSq) {
+static inline void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, double *_sumSq) {
     double mx = -1;
     double sumSq = 0;
     for (int i = 0; i < m; ++i) {
@@ -39,12 +40,6 @@ void stats_submatrix(const double *E, int m, int n, int stride, double *_mx, dou
 
 extern control_block cb;
 
-// #ifdef SSE_VEC
-// If you intend to vectorize using SSE instructions, you must
-// disable the compiler's auto-vectorizer
-// __attribute__((optimize("no-tree-vectorize")))
-// #endif
-
 // The L2 norm of an array is computed by taking sum of the squares
 // of each element, normalizing by dividing by the number of points
 // and then taking the sequare root of the result
@@ -55,6 +50,22 @@ double L2Norm(double sumSq) {
     return l2norm;
 }
 
+static inline void compute_status(const double *E, int m, int n, int stride, double *_mx, double *_l2, int myrank) {
+    double mx, sumSq;
+    stats_submatrix(E, m, n, stride, &mx, &sumSq);
+#ifdef _MPI_
+    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &mx, &mx, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+#endif
+    *_mx = mx;
+    *_l2 = L2Norm(sumSq);
+}
+
+// #ifdef SSE_VEC
+// If you intend to vectorize using SSE instructions, you must
+// disable the compiler's auto-vectorizer
+// __attribute__((optimize("no-tree-vectorize")))
+// #endif
 // Compute within sub-block
 static inline void aliev_panfilov(double *__restrict__ E,
                                   double *__restrict__ E_prev,
@@ -112,6 +123,81 @@ static inline void copy_arr(const double *__restrict__ from, double *__restrict_
     }
 }
 
+static inline void reorganize(const double *__restrict__ from,
+                              double *__restrict__ to,
+                              const int stride,
+                              const int M,
+                              const int N,
+                              const int XL,
+                              const int YL) {
+    int to_pos = 0;
+    for (int i = 0; i < cb.px * M; ++i)
+        for (int j = 0; j < cb.py * N; ++j)
+            to[i * (cb.py * N) + j] = 0;
+    for (int x = 0; x < cb.px; ++x) {
+        for (int y = 0; y < cb.py; ++y) {
+            int addx = (x - XL) < 0 ? 0 : (x - XL);
+            int addy = (y - YL) < 0 ? 0 : (y - YL);
+            int prevx = (x - XL) <= 0 ? x : XL;
+            int prevy = (y - YL) <= 0 ? y : YL;
+            int m = x < XL ? M : (M - 1);
+            int n = y < YL ? N : (N - 1);
+            int offset = (prevx * M + addx * (M - 1) + 1) * stride + (prevy * N + addy * (N - 1)) + 1;
+
+            for (int i = 0; i < m; i++)
+                for (int j = 0; j < n; j++)
+                    to[to_pos + i * N + j] = from[offset + i * stride + j];
+
+            to_pos += M * N;
+        }
+    }
+}
+
+static inline void reorganize_reverse(const double *__restrict__ from,
+                                      double *__restrict__ to,
+                                      const int stride,
+                                      const int M,
+                                      const int N,
+                                      const int XL,
+                                      const int YL) {
+    int to_pos = 0;
+    for (int x = 0; x < cb.px; ++x) {
+        for (int y = 0; y < cb.py; ++y) {
+            int addx = (x - XL) < 0 ? 0 : (x - XL);
+            int addy = (y - YL) < 0 ? 0 : (y - YL);
+            int prevx = (x - XL) <= 0 ? x : XL;
+            int prevy = (y - YL) <= 0 ? y : YL;
+            int m = x < XL ? M : (M - 1);
+            int n = y < YL ? N : (N - 1);
+            int offset = (prevx * M + addx * (M - 1) + 1) * stride + (prevy * N + addy * (N - 1)) + 1;
+            for (int i = 0; i < m; i++)
+                for (int j = 0; j < n; j++)
+//                    to[to_pos + i * N + j] = from[offset + i * stride + j];
+                    to[offset + i * stride + j] = from[to_pos + i * N + j];
+
+            to_pos += M * N;
+        }
+    }
+}
+
+static inline void place_sub_matrix(const double *__restrict__ from, double *__restrict__ to,
+                                    const int M, const int N) {
+    for (int i = 0; i < M + 2; i++)
+        for (int j = 0; j < N + 2; j++)
+            to[i * (N + 2) + j] = 0;
+    for (int i = 0; i < M; i++)
+        for (int j = 0; j < N; j++)
+            to[(i + 1) * (N + 2) + (j + 1)] = from[i * N + j];
+}
+
+static inline void place_sub_matrix_reverse(const double *__restrict__ from, double *__restrict__ to,
+                                            const int M, const int N) {
+    for (int i = 0; i < M; i++)
+        for (int j = 0; j < N; j++)
+//            to[(i + 1) * (N + 2) + (j + 1)] = from[i * N + j];
+            to[i * N + j] = from[(i + 1) * (N + 2) + (j + 1)];
+}
+
 #define RANK(x, y) ((x)*cb.py+(y))
 
 #define TAG_TOP 0
@@ -119,34 +205,57 @@ static inline void copy_arr(const double *__restrict__ from, double *__restrict_
 #define TAG_LEFT (TAG_TOP+2)
 #define TAG_RIGHT (TAG_TOP+3)
 
-void
-solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotter *plotter, double &L2, double &Linf) {
-    double *E = *_E, *E_prev = *_E_prev, *R = _R;
+void solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotter *plotter, double &L2,
+           double &Linf) {
+    double *E_prev = *_E_prev, *R = _R;
 
-    const int stride = cb.n + 2;
+    int stride = cb.n + 2;
 
     int myrank = 0;
 #ifdef _MPI_
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-    // Distribute the initial conditions to the worker processes from process 0
-    MPI_Bcast(E_prev, (cb.m + 2) * (cb.n + 2), MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Bcast(R, (cb.m + 2) * (cb.n + 2), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 #endif
+
     // 2D index of sub-block
     const int x = myrank / cb.py;
     const int y = myrank % cb.py;
     // dimension of sub-block generally
     const int M = (cb.m + cb.px - 1) / cb.px;
     const int N = (cb.n + cb.py - 1) / cb.py;
+    //larger block boundary
+    const int XL = cb.px - (cb.px * M - cb.m);
+    const int YL = cb.py - (cb.py * N - cb.n);
     // dimension of this sub-block
-    const int m = x == cb.px - 1 ? cb.m - (cb.px - 1) * M : M;
-    const int n = y == cb.py - 1 ? cb.n - (cb.py - 1) * N : N;
+    const int m = x < XL ? M : (M - 1);
+    const int n = y < YL ? N : (N - 1);
 
-    // Sub-block
-    const int offset = x * M * stride + y * N;
-    double *e = E + offset;
-    double *e_prev = E_prev + offset;
-    double *r = R + offset;
+    double *e = alloc1D(M + 2, N + 2);
+    double *e_prev = alloc1D(M + 2, N + 2);
+    double *r = alloc1D(M + 2, N + 2);
+#ifdef _MPI_
+    double *E_scatter = alloc1D(cb.px * M, cb.py * N);
+    double *R_scatter = alloc1D(cb.px * M, cb.py * N);
+    double *E_recv = alloc1D(M, N);
+    double *R_recv = alloc1D(M, N);
+
+    if (myrank == 0) {
+        reorganize(E_prev, E_scatter, stride, M, N, XL, YL);
+        reorganize(R, R_scatter, stride, M, N, XL, YL);
+    }
+
+    if (!cb.noComm) {
+        MPI_Scatter(E_scatter, M * N, MPI_DOUBLE, E_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Scatter(R_scatter, M * N, MPI_DOUBLE, R_recv, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
+
+    place_sub_matrix(E_recv, e_prev, M, N);
+    place_sub_matrix(R_recv, r, M, N);
+#else
+    copy_arr(E_prev, e_prev, 1, (M + 2) * (N + 2));
+    copy_arr(R, r, 1, (M + 2) * (N + 2));
+#endif
+
+    stride = N + 2;
 
 #ifdef _MPI_
     MPI_Datatype col_type;
@@ -230,19 +339,23 @@ solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotte
         aliev_panfilov(e, e_prev, r, alpha, dt, stride, m, n);
 
         if (cb.stats_freq && !(niter % cb.stats_freq)) {
-            double mx, sumSq;
-//            stats(E, cb.m, cb.n, &mx, &sumSq);
-            stats_submatrix(e, m, n, stride, &mx, &sumSq);
-#ifdef _MPI_
-            MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &mx, &mx, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-            MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-#endif
-            double l2norm = L2Norm(sumSq);
+            double mx, l2norm;
+            compute_status(r, m, n, stride, &mx, &l2norm, myrank);
             repNorms(l2norm, mx, dt, cb.m, cb.n, niter, cb.stats_freq);
         }
 
         if (cb.plot_freq && !(niter % cb.plot_freq)) {
-            plotter->updatePlot(E, niter, cb.m, cb.n);
+#ifdef _MPI_
+            place_sub_matrix_reverse(e, E_recv, M, N);
+            MPI_Gather(E_recv, M * N, MPI_DOUBLE, E_scatter, M * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+            if (myrank == 0) {
+                reorganize_reverse(E_scatter, E_prev, cb.n + 2, M, N, XL, YL);
+                plotter->updatePlot(E_prev, niter, cb.m, cb.n);
+            }
+#else
+            plotter->updatePlot(e, niter, cb.m, cb.n);
+#endif
         }
 
         // Swap current and previous meshes
@@ -253,14 +366,7 @@ solve(double **_E, double **_E_prev, double *_R, double alpha, double dt, Plotte
     MPI_Type_free(&col_type);
 #endif
 
-    double sumSq;
-//    stats(E_prev, cb.m, cb.n, &Linf, &sumSq);
-    stats_submatrix(e_prev, m, n, stride, &Linf, &sumSq);
-#ifdef _MPI_
-    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &Linf, &Linf, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(myrank == 0 ? MPI_IN_PLACE : &sumSq, &sumSq, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-#endif
-    L2 = L2Norm(sumSq);
+    compute_status(e_prev, m, n, stride, &Linf, &L2, myrank);
 
     // Swap pointers so we can re-use the arrays
     if (cb.niters % 2) {
