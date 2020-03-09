@@ -23,11 +23,11 @@ B: Yang Jiao
 (2) Estimate how much time each team member devoted to this project, in HOURS.
 
   	                        A 	       B
-meetings 	  	  	        2
-coding 	  	  	            8
-writeup 	  	  	        4
-planning (alone) 	  	  	2
-total (including meetings) 	16
+meetings 	  	  	        2            2
+coding 	  	  	            8          8
+writeup 	  	  	        4            10
+planning (alone) 	  	  	2            1
+total (including meetings) 	16         21
 
 
 (3) Discuss the following.
