@@ -93,6 +93,9 @@ static inline void aliev_panfilov(double *__restrict__ E,
         }
     }
 #else
+    #ifdef DOAVX
+    #pragma simd  
+    #endif
     for (int j = innerBlockRowStartIndex; j <= innerBlockRowEndIndex; j += stride) {
         double *E_tmp = E + j;
         double *E_prev_tmp = E_prev + j;
@@ -102,7 +105,9 @@ static inline void aliev_panfilov(double *__restrict__ E,
                     + E_prev_tmp[i - stride]);
         }
     }
-
+    #ifdef DOAVX
+    #pragma simd  
+    #endif
     for (int j = innerBlockRowStartIndex; j <= innerBlockRowEndIndex; j += stride) {
         double *E_tmp = E + j;
         double *R_tmp = R + j;
